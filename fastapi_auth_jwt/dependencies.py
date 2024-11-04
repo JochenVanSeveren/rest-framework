@@ -2,8 +2,10 @@
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl).
 
 import logging
-from typing import Annotated, Any, Dict, Optional, Tuple, Union
+from typing import Annotated, Any
 
+from fastapi import Depends, HTTPException, Request, Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.status import HTTP_401_UNAUTHORIZED
 
 from odoo.api import Environment
@@ -17,19 +19,17 @@ from odoo.addons.auth_jwt.exceptions import (
 )
 from odoo.addons.auth_jwt.models.auth_jwt_validator import AuthJwtValidator
 from odoo.addons.base.models.res_partner import Partner
-from odoo.addons.fastapi.dependencies import odoo_env
+from odoo.addons.fastapi.dependencies import accept_language, odoo_env
 
-from fastapi import Depends, HTTPException, Request, Response
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 _logger = logging.getLogger(__name__)
 
 
-Payload = Dict[str, Any]
+Payload = dict[str, Any]
 
 
 def _get_auth_jwt_validator(
-    validator_name: Union[str, None],
+    validator_name: str | None,
     env: Environment,
 ) -> AuthJwtValidator:
     validator = env["auth.jwt.validator"].sudo()._get_validator_by_name(validator_name)
@@ -39,9 +39,9 @@ def _get_auth_jwt_validator(
 
 def _request_has_authentication(
     request: Request,
-    authorization_header: Optional[str],
+    authorization_header: str | None,
     validator: AuthJwtValidator,
-) -> Union[Payload, None]:
+) -> Payload | None:
     if authorization_header is not None:
         return True
     if not validator.cookie_enabled:
@@ -52,11 +52,12 @@ def _request_has_authentication(
 
 def _get_jwt_payload(
     request: Request,
-    authorization_header: Optional[str],
+    authorization_header: str | None,
     validator: AuthJwtValidator,
 ) -> Payload:
     """Obtain and validate the JWT payload from the request authorization header or
-    cookie (if enabled on the validator)."""
+    cookie (if enabled on the validator).
+    """
     if authorization_header is not None:
         return validator._decode(authorization_header)
     if not validator.cookie_enabled:
@@ -76,9 +77,9 @@ def _get_jwt_payload(
 def _get_jwt_payload_and_validator(
     request: Request,
     response: Response,
-    authorization_header: Optional[str],
+    authorization_header: str | None,
     validator: AuthJwtValidator,
-) -> Tuple[Payload, AuthJwtValidator]:
+) -> tuple[Payload, AuthJwtValidator]:
     try:
         payload = None
         exceptions = {}
@@ -117,25 +118,23 @@ def _get_jwt_payload_and_validator(
         raise HTTPException(status_code=HTTP_401_UNAUTHORIZED) from e
 
 
-def auth_jwt_default_validator_name() -> Union[str, None]:
+def auth_jwt_default_validator_name() -> str | None:
     return None
 
 
 def auth_jwt_http_header_authorization(
     credentials: Annotated[
-        Optional[HTTPAuthorizationCredentials],
+        HTTPAuthorizationCredentials | None,
         Depends(HTTPBearer(auto_error=False)),
-    ]
+    ],
 ):
     if credentials is None:
         return None
     return credentials.credentials
 
 
-class BaseAuthJwt:  # noqa: B903
-    def __init__(
-        self, validator_name: Optional[str] = None, allow_unauthenticated: bool = False
-    ):
+class BaseAuthJwt:
+    def __init__(self, validator_name: str | None = None, allow_unauthenticated: bool = False):
         self.validator_name = validator_name
         self.allow_unauthenticated = allow_unauthenticated
 
@@ -146,28 +145,22 @@ class AuthJwtPayload(BaseAuthJwt):
         request: Request,
         response: Response,
         authorization_header: Annotated[
-            Optional[str],
+            str | None,
             Depends(auth_jwt_http_header_authorization),
         ],
         default_validator_name: Annotated[
-            Union[str, None],
+            str | None,
             Depends(auth_jwt_default_validator_name),
         ],
         env: Annotated[
             Environment,
             Depends(odoo_env),
         ],
-    ) -> Optional[Payload]:
-        validator = _get_auth_jwt_validator(
-            self.validator_name or default_validator_name, env
-        )
-        if self.allow_unauthenticated and not _request_has_authentication(
-            request, authorization_header, validator
-        ):
+    ) -> Payload | None:
+        validator = _get_auth_jwt_validator(self.validator_name or default_validator_name, env)
+        if self.allow_unauthenticated and not _request_has_authentication(request, authorization_header, validator):
             return None
-        return _get_jwt_payload_and_validator(
-            request, response, authorization_header, validator
-        )[0]
+        return _get_jwt_payload_and_validator(request, response, authorization_header, validator)[0]
 
 
 class AuthJwtPartner(BaseAuthJwt):
@@ -176,28 +169,23 @@ class AuthJwtPartner(BaseAuthJwt):
         request: Request,
         response: Response,
         authorization_header: Annotated[
-            Optional[str],
+            str | None,
             Depends(auth_jwt_http_header_authorization),
         ],
         default_validator_name: Annotated[
-            Union[str, None],
+            str | None,
             Depends(auth_jwt_default_validator_name),
         ],
         env: Annotated[
             Environment,
             Depends(odoo_env),
         ],
+        lang: str = Depends(accept_language),
     ) -> Partner:
-        validator = _get_auth_jwt_validator(
-            self.validator_name or default_validator_name, env
-        )
-        if self.allow_unauthenticated and not _request_has_authentication(
-            request, authorization_header, validator
-        ):
+        validator = _get_auth_jwt_validator(self.validator_name or default_validator_name, env)
+        if self.allow_unauthenticated and not _request_has_authentication(request, authorization_header, validator):
             return env["res.partner"].with_user(env.ref("base.public_user")).browse()
-        payload, validator = _get_jwt_payload_and_validator(
-            request, response, authorization_header, validator
-        )
+        payload, validator = _get_jwt_payload_and_validator(request, response, authorization_header, validator)
         try:
             uid = validator._get_and_check_uid(payload)
             partner_id = validator._get_and_check_partner_id(payload)
@@ -206,7 +194,15 @@ class AuthJwtPartner(BaseAuthJwt):
         if not partner_id:
             _logger.info("Could not determine partner from JWT payload.")
             raise HTTPException(status_code=HTTP_401_UNAUTHORIZED)
-        return env["res.partner"].with_user(uid).browse(partner_id)
+
+        partner = env["res.partner"].with_user(uid).browse(partner_id)
+
+        if lang and lang != partner.lang:
+            try:
+                partner.write({"lang": lang})
+            except Exception as e:
+                _logger.error(f"Failed to update partner {partner.id} language to lang: {lang} error: {e!s}")
+        return partner
 
 
 class AuthJwtOdooEnv(BaseAuthJwt):
@@ -215,26 +211,32 @@ class AuthJwtOdooEnv(BaseAuthJwt):
         request: Request,
         response: Response,
         authorization_header: Annotated[
-            Optional[str],
+            str | None,
             Depends(auth_jwt_http_header_authorization),
         ],
         default_validator_name: Annotated[
-            Union[str, None],
+            str | None,
             Depends(auth_jwt_default_validator_name),
         ],
         env: Annotated[
             Environment,
             Depends(odoo_env),
         ],
+        # to set lang in env
+        lang: str = Depends(accept_language),
     ) -> Environment:
-        validator = _get_auth_jwt_validator(
-            self.validator_name or default_validator_name, env
-        )
-        payload, validator = _get_jwt_payload_and_validator(
-            request, response, authorization_header, validator
-        )
+        validator = _get_auth_jwt_validator(self.validator_name or default_validator_name, env)
+        if self.allow_unauthenticated and not _request_has_authentication(request, authorization_header, validator):
+            return Environment(env.cr, uid=env.ref("base.public_user").id, context={"lang": lang})
+        payload, validator = _get_jwt_payload_and_validator(request, response, authorization_header, validator)
         uid = validator._get_and_check_uid(payload)
-        return odoo_env(user=uid)
+
+        # return new env with uid
+        # env.uid = uid
+
+        env = Environment(env.cr, uid=uid, context={"lang": lang})
+
+        return env
 
 
 auth_jwt_authenticated_payload = AuthJwtPayload()
