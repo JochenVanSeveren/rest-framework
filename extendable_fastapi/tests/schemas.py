@@ -4,6 +4,7 @@ from typing import Generic, TypeVar
 
 from extendable_pydantic import ExtendableBaseModel
 
+
 # User models
 
 

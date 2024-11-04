@@ -1,10 +1,9 @@
 # Copyright 2023 ACSONE SA/NV
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
+from fastapi.exceptions import ResponseValidationError
 from requests import Response
 
 from odoo.tests.common import tagged
-
-from fastapi.exceptions import ResponseValidationError
 
 from .common import FastAPITransactionCase
 from .routers import demo_pydantic_router
@@ -22,39 +21,39 @@ class TestUser(FastAPITransactionCase):
             to_openapi = test_client.app.openapi()
             # Check post input and output types
             self.assertEqual(
-                to_openapi["paths"]["/post_user"]["post"]["requestBody"]["content"][
-                    "application/json"
-                ]["schema"]["$ref"],
+                to_openapi["paths"]["/post_user"]["post"]["requestBody"]["content"]["application/json"]["schema"][
+                    "$ref"
+                ],
                 "#/components/schemas/User",
             )
             self.assertEqual(
-                to_openapi["paths"]["/post_user"]["post"]["responses"]["200"][
-                    "content"
-                ]["application/json"]["schema"]["$ref"],
+                to_openapi["paths"]["/post_user"]["post"]["responses"]["200"]["content"]["application/json"]["schema"][
+                    "$ref"
+                ],
                 "#/components/schemas/UserSearchResponse",
             )
             self.assertEqual(
-                to_openapi["paths"]["/post_private_user"]["post"]["requestBody"][
-                    "content"
-                ]["application/json"]["schema"]["$ref"],
+                to_openapi["paths"]["/post_private_user"]["post"]["requestBody"]["content"]["application/json"][
+                    "schema"
+                ]["$ref"],
                 "#/components/schemas/PrivateUser",
             )
             self.assertEqual(
-                to_openapi["paths"]["/post_private_user"]["post"]["responses"]["200"][
-                    "content"
-                ]["application/json"]["schema"]["$ref"],
+                to_openapi["paths"]["/post_private_user"]["post"]["responses"]["200"]["content"]["application/json"][
+                    "schema"
+                ]["$ref"],
                 "#/components/schemas/User",
             )
             self.assertEqual(
-                to_openapi["paths"]["/post_private_user_generic"]["post"][
-                    "requestBody"
-                ]["content"]["application/json"]["schema"]["$ref"],
+                to_openapi["paths"]["/post_private_user_generic"]["post"]["requestBody"]["content"]["application/json"][
+                    "schema"
+                ]["$ref"],
                 "#/components/schemas/PrivateUser",
             )
             self.assertEqual(
-                to_openapi["paths"]["/post_private_user_generic"]["post"]["responses"][
-                    "200"
-                ]["content"]["application/json"]["schema"]["$ref"],
+                to_openapi["paths"]["/post_private_user_generic"]["post"]["responses"]["200"]["content"][
+                    "application/json"
+                ]["schema"]["$ref"],
                 "#/components/schemas/UserSearchResponse",
             )
 
@@ -64,17 +63,11 @@ class TestUser(FastAPITransactionCase):
                 {"name", "address"},
             )
             self.assertEqual(
-                set(
-                    to_openapi["components"]["schemas"]["PrivateUser"][
-                        "properties"
-                    ].keys()
-                ),
+                set(to_openapi["components"]["schemas"]["PrivateUser"]["properties"].keys()),
                 {"name", "address", "password"},
             )
             self.assertEqual(
-                to_openapi["components"]["schemas"]["UserSearchResponse"]["properties"][
-                    "items"
-                ]["items"]["$ref"],
+                to_openapi["components"]["schemas"]["UserSearchResponse"]["properties"]["items"]["items"]["$ref"],
                 "#/components/schemas/User",
             )
 
@@ -86,9 +79,7 @@ class TestUser(FastAPITransactionCase):
         self.assertTrue(pydantic_data.address)
 
         with self._create_test_client(router=demo_pydantic_router) as test_client:
-            response: Response = test_client.post(
-                "/post_user", content=pydantic_data.model_dump_json()
-            )
+            response: Response = test_client.post("/post_user", content=pydantic_data.model_dump_json())
             self.assertEqual(response.status_code, 200)
             res = response.json()
             self.assertEqual(res["total"], 1)
@@ -114,9 +105,7 @@ class TestUser(FastAPITransactionCase):
         self.assertTrue(pydantic_data.password)
 
         with self._create_test_client(router=demo_pydantic_router) as test_client:
-            response: Response = test_client.post(
-                "/post_private_user", content=pydantic_data.model_dump_json()
-            )
+            response: Response = test_client.post("/post_private_user", content=pydantic_data.model_dump_json())
             self.assertEqual(response.status_code, 200)
             user = response.json()
             self.assertEqual(user["name"], name)
@@ -142,9 +131,7 @@ class TestUser(FastAPITransactionCase):
         self.assertTrue(pydantic_data.password)
 
         with self._create_test_client(router=demo_pydantic_router) as test_client:
-            response: Response = test_client.post(
-                "/post_private_user_generic", content=pydantic_data.model_dump_json()
-            )
+            response: Response = test_client.post("/post_private_user_generic", content=pydantic_data.model_dump_json())
             self.assertEqual(response.status_code, 200)
             res = response.json()
             self.assertEqual(res["total"], 1)
@@ -160,15 +147,14 @@ class TestUser(FastAPITransactionCase):
         -> Error because address is a required field on User (extended) class
         :return:
         """
-        user = self.env["res.users"].create(
-            {
-                "name": "Michel Dupont",
-                "login": "michel",
-            }
-        )
-        with self._create_test_client(
-            router=demo_pydantic_router
-        ) as test_client, self.assertRaises(ResponseValidationError):
+        user = self.env["res.users"].create({
+            "name": "Michel Dupont",
+            "login": "michel",
+        })
+        with (
+            self._create_test_client(router=demo_pydantic_router) as test_client,
+            self.assertRaises(ResponseValidationError),
+        ):
             test_client.get(f"/{user.id}")
 
     def test_get_user_failed_no_pwd(self):
@@ -177,13 +163,11 @@ class TestUser(FastAPITransactionCase):
         -> No error because return type is User, not PrivateUser
         :return:
         """
-        user = self.env["res.users"].create(
-            {
-                "name": "Michel Dupont",
-                "login": "michel",
-                "street": "Rue du Moulin",
-            }
-        )
+        user = self.env["res.users"].create({
+            "name": "Michel Dupont",
+            "login": "michel",
+            "street": "Rue du Moulin",
+        })
         self.assertFalse(user.password)
         with self._create_test_client(router=demo_pydantic_router) as test_client:
             response: Response = test_client.get(f"/private/{user.id}")
@@ -200,9 +184,8 @@ class TestUser(FastAPITransactionCase):
         password = "dummy123"
         pydantic_data = PrivateCustomer(name=name, address=address, password=password)
 
-        with self.assertRaises(ResponseValidationError), self._create_test_client(
-            router=demo_pydantic_router
-        ) as test_client:
-            test_client.post(
-                "/post_private_customer", content=pydantic_data.model_dump_json()
-            )
+        with (
+            self.assertRaises(ResponseValidationError),
+            self._create_test_client(router=demo_pydantic_router) as test_client,
+        ):
+            test_client.post("/post_private_customer", content=pydantic_data.model_dump_json())

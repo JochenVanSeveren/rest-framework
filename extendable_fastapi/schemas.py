@@ -1,8 +1,8 @@
 from typing import Annotated, Generic, TypeVar
 
 from extendable_pydantic import StrictExtendableBaseModel
-
 from pydantic import Field
+
 
 T = TypeVar("T")
 

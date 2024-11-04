@@ -3,12 +3,12 @@
 
 from contextlib import contextmanager
 
+from extendable import context
+
 from odoo.addons.extendable.registry import _extendable_registries_database
 from odoo.addons.fastapi.fastapi_dispatcher import (
     FastApiDispatcher as BaseFastApiDispatcher,
 )
-
-from extendable import context
 
 
 class FastApiDispatcher(BaseFastApiDispatcher):

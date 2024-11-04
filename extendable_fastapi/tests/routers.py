@@ -2,13 +2,14 @@
 # License LGPL-3.0 or later (https://www.gnu.org/licenses/lgpl).
 from typing import Annotated
 
+from fastapi import APIRouter, Depends
+
 from odoo import api
 
 from odoo.addons.fastapi.dependencies import odoo_env
 
-from fastapi import APIRouter, Depends
-
 from .schemas import Customer, PrivateCustomer, PrivateUser, User, UserSearchResponse
+
 
 demo_pydantic_router = APIRouter(tags=["demo_pydantic"])
 
@@ -25,9 +26,7 @@ def get(env: Annotated[api.Environment, Depends(odoo_env)], user_id: int) -> Use
 
 
 @demo_pydantic_router.get("/private/{user_id}")
-def get_private(
-    env: Annotated[api.Environment, Depends(odoo_env)], user_id: int
-) -> User:
+def get_private(env: Annotated[api.Environment, Depends(odoo_env)], user_id: int) -> User:
     """
     Get a specific user using its Odoo id.
     """
