@@ -5,11 +5,11 @@
     "name": "Extendable Fastapi",
     "summary": """
         Allows the use of extendable into fastapi apps""",
-    "version": "17.0.0.0.1",
+    "version": "16.0.2.1.1",
     "license": "LGPL-3",
     "author": "ACSONE SA/NV,Odoo Community Association (OCA)",
     "maintainers": ["lmignon"],
-    "website": "https://www.odoo.com",
+    "website": "https://github.com/OCA/rest-framework",
     "depends": ["fastapi", "extendable"],
     "data": [],
     "demo": [],
