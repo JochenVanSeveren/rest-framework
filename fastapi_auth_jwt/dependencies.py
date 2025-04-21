@@ -4,8 +4,6 @@
 import logging
 from typing import Annotated, Any
 
-from fastapi import Depends, HTTPException, Request, Response
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.status import HTTP_401_UNAUTHORIZED
 
 from odoo.api import Environment
@@ -21,6 +19,8 @@ from odoo.addons.auth_jwt.models.auth_jwt_validator import AuthJwtValidator
 from odoo.addons.base.models.res_partner import Partner
 from odoo.addons.fastapi.dependencies import accept_language, odoo_env
 
+from fastapi import Depends, HTTPException, Request, Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 _logger = logging.getLogger(__name__)
 
@@ -134,7 +134,9 @@ def auth_jwt_http_header_authorization(
 
 
 class BaseAuthJwt:
-    def __init__(self, validator_name: str | None = None, allow_unauthenticated: bool = False):
+    def __init__(
+        self, validator_name: str | None = None, allow_unauthenticated: bool = False
+    ):
         self.validator_name = validator_name
         self.allow_unauthenticated = allow_unauthenticated
 
@@ -157,10 +159,16 @@ class AuthJwtPayload(BaseAuthJwt):
             Depends(odoo_env),
         ],
     ) -> Payload | None:
-        validator = _get_auth_jwt_validator(self.validator_name or default_validator_name, env)
-        if self.allow_unauthenticated and not _request_has_authentication(request, authorization_header, validator):
+        validator = _get_auth_jwt_validator(
+            self.validator_name or default_validator_name, env
+        )
+        if self.allow_unauthenticated and not _request_has_authentication(
+            request, authorization_header, validator
+        ):
             return None
-        return _get_jwt_payload_and_validator(request, response, authorization_header, validator)[0]
+        return _get_jwt_payload_and_validator(
+            request, response, authorization_header, validator
+        )[0]
 
 
 class AuthJwtPartner(BaseAuthJwt):
@@ -180,12 +188,18 @@ class AuthJwtPartner(BaseAuthJwt):
             Environment,
             Depends(odoo_env),
         ],
-        lang: str = Depends(accept_language),
+        lang: str = Depends(accept_language),  # will send an error if not a valid lang
     ) -> Partner:
-        validator = _get_auth_jwt_validator(self.validator_name or default_validator_name, env)
-        if self.allow_unauthenticated and not _request_has_authentication(request, authorization_header, validator):
+        validator = _get_auth_jwt_validator(
+            self.validator_name or default_validator_name, env
+        )
+        if self.allow_unauthenticated and not _request_has_authentication(
+            request, authorization_header, validator
+        ):
             return env["res.partner"].with_user(env.ref("base.public_user")).browse()
-        payload, validator = _get_jwt_payload_and_validator(request, response, authorization_header, validator)
+        payload, validator = _get_jwt_payload_and_validator(
+            request, response, authorization_header, validator
+        )
         try:
             uid = validator._get_and_check_uid(payload)
             partner_id = validator._get_and_check_partner_id(payload)
@@ -201,7 +215,9 @@ class AuthJwtPartner(BaseAuthJwt):
             try:
                 partner.write({"lang": lang})
             except Exception as e:
-                _logger.error(f"Failed to update partner {partner.id} language to lang: {lang} error: {e!s}")
+                _logger.error(
+                    f"Failed to update partner {partner.id} language to lang: {lang} error: {e!s}"
+                )
         return partner
 
 
@@ -225,10 +241,18 @@ class AuthJwtOdooEnv(BaseAuthJwt):
         # to set lang in env
         lang: str = Depends(accept_language),
     ) -> Environment:
-        validator = _get_auth_jwt_validator(self.validator_name or default_validator_name, env)
-        if self.allow_unauthenticated and not _request_has_authentication(request, authorization_header, validator):
-            return Environment(env.cr, uid=env.ref("base.public_user").id, context={"lang": lang})
-        payload, validator = _get_jwt_payload_and_validator(request, response, authorization_header, validator)
+        validator = _get_auth_jwt_validator(
+            self.validator_name or default_validator_name, env
+        )
+        if self.allow_unauthenticated and not _request_has_authentication(
+            request, authorization_header, validator
+        ):
+            return Environment(
+                env.cr, uid=env.ref("base.public_user").id, context={"lang": lang}
+            )
+        payload, validator = _get_jwt_payload_and_validator(
+            request, response, authorization_header, validator
+        )
         uid = validator._get_and_check_uid(payload)
 
         # return new env with uid
