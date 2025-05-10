@@ -9,7 +9,7 @@ for the ASGI application.
 
 """
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import a2wsgi
 from a2wsgi.asgi import ASGIResponder

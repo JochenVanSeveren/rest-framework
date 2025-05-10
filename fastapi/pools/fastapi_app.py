@@ -4,8 +4,8 @@ import logging
 import queue
 import threading
 from collections import defaultdict
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 from odoo.api import Environment
 
@@ -61,10 +61,10 @@ class FastApiAppPool:
     """
 
     def __init__(self):
-        self._queue_by_db_by_root_path: dict[
-            str, dict[str, queue.Queue[FastAPI]]
-        ] = defaultdict(lambda: defaultdict(queue.Queue))
-        self.__cache_sequence = 0
+        self._queue_by_db_by_root_path: dict[str, dict[str, queue.Queue[FastAPI]]] = (
+            defaultdict(lambda: defaultdict(queue.Queue))
+        )
+        self.__cache_sequences = {}
         self._lock = threading.Lock()
 
     def __get_pool(self, env: Environment, root_path: str) -> queue.Queue[FastAPI]:
@@ -101,25 +101,31 @@ class FastApiAppPool:
         finally:
             self.__return_app(env, app, root_path)
 
-    @property
-    def cache_sequence(self) -> int:
-        return self.__cache_sequence
+    def get_cache_sequence(self, key: str) -> int:
+        with self._lock:
+            return self.__cache_sequences.get(key, 0)
 
-    @cache_sequence.setter
-    def cache_sequence(self, value: int) -> None:
-        if value != self.__cache_sequence:
-            with self._lock:
-                self.__cache_sequence = value
+    def set_cache_sequence(self, key: str, value: int) -> None:
+        with self._lock:
+            if (
+                key not in self.__cache_sequences
+                or value != self.__cache_sequences[key]
+            ):
+                self.__cache_sequences[key] = value
 
     def _check_cache(self, env: Environment) -> None:
-        cache_sequence = env.registry.cache_sequence
-        if cache_sequence != self.cache_sequence and self.cache_sequence != 0:
-            _logger.info(
-                "Cache registry updated, reset fastapi_app pool for the current "
-                "database"
-            )
-            self.invalidate(env)
-        self.cache_sequence = cache_sequence
+        cache_sequences = env.registry.cache_sequences
+        for key, value in cache_sequences.items():
+            if (
+                value != self.get_cache_sequence(key)
+                and self.get_cache_sequence(key) != 0
+            ):
+                _logger.info(
+                    "Cache registry updated, reset fastapi_app pool for the current "
+                    "database"
+                )
+                self.invalidate(env)
+            self.set_cache_sequence(key, value)
 
     def invalidate(self, env: Environment, root_path: str | None = None) -> None:
         db_name = env.cr.dbname

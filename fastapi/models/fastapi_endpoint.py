@@ -121,7 +121,7 @@ class FastapiEndpoint(models.Model):
         return tuple(res)
 
     @api.model
-    def _routing_impacting_fields(self) -> Tuple[str, ...]:
+    def _routing_impacting_fields(self) -> tuple[str, ...]:
         """The list of fields requiring to refresh the mount point of the pp
         into odoo if modified"""
         return ("root_path", "save_http_session")
@@ -198,17 +198,7 @@ class FastapiEndpoint(models.Model):
         return f"{self._name}:{self.id}:{path}"
 
     def _reset_app(self):
-        self._reset_app_cache_marker.clear_cache(self)
-
-    @tools.ormcache()
-    def _reset_app_cache_marker(self):
-        """This methos is used to get a way to mark the orm cache as dirty
-        when the app is reset. By marking the cache as dirty, the system
-        will signal to others instances that the cache is not up to date
-        and that they should invalidate their cache as well. This is required
-        to ensure that any change requiring a reset of the app is propagated
-        to all the running instances.
-        """
+        self.env.registry.clear_cache()
 
     @api.model
     def get_app(self, root_path):

@@ -4,8 +4,8 @@
 import asyncio
 import queue
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 
 class EventLoopPool:
