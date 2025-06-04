@@ -211,13 +211,30 @@ class AuthJwtPartner(BaseAuthJwt):
 
         partner = env["res.partner"].with_user(uid).browse(partner_id)
 
-        if lang and lang != partner.lang:
-            try:
-                partner.write({"lang": lang})
-            except Exception as e:
-                _logger.error(
-                    f"Failed to update partner {partner.id} language to lang: {lang} error: {e!s}"
-                )
+        # TODO move this to cwg_api module
+        # TODO: enifficient to check force_app_lang and lang on every request -> move this to a background job in the app that calls a certain enpdpoint to sync
+        try:
+            if lang:
+                # Handle force_app_lang logic
+                if partner.force_app_lang and partner.lang:
+                    # force_app_lang is set, check if it matches incoming lang
+                    if lang != partner.force_app_lang:
+                        # Language mismatch - set header to indicate forced language
+                        response.headers["X-Force-Language"] = partner.force_app_lang
+                    elif lang == partner.force_app_lang:
+                        # Language matches - disable force_app_lang
+                        try:
+                            partner.write({"force_app_lang": False})
+                        except Exception as e:
+                            _logger.error(
+                                f"Failed to update partner {partner.id} force_app_lang: {e!s}"
+                            )
+                elif lang != partner.lang:
+                    partner.write({"lang": lang})
+        except Exception as e:
+            _logger.error(
+                f"Error lang handling partner {partner.id} language to lang: {lang} error: {e!s}"
+            )
         return partner
 
 
